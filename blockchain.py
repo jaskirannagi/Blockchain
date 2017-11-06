@@ -10,10 +10,11 @@ GPIO.setup(17,GPIO.OUT) #blue
 GPIO.setup(27,GPIO.OUT) #green
 GPIO.setup(22,GPIO.OUT)#red
 GPIO.setup(4,GPIO.IN) #switch
-setup=0;
-buffcount=0;
-transaction=false;
-start_time = 0;
+setup=0
+buffcount=0
+transaction=false
+start_time = 0
+
 
 def geninissbloc():  #create the first block for the chain
     state = {u'raspA':50, u'raspB':50,u'raspC':50}  # Define the initial state
@@ -67,9 +68,9 @@ def makeTransaction(maxValue=3):#randomly generate a transaction to test the sys
     
     
     
-def flooddetect(nodee='',flooded,node1='',node2=''):#randomly generate a transaction to test the system
+def flooddetect(nodee='',flooded,node1='',flooded1,node2='',flooded2):#randomly generate a transaction to test the system
 
-    return {nodee:flooded,node1:0,node2:0}    
+    return {nodee:flooded,node1:flooded1,node2:flooded2}    
     
 
 
@@ -232,15 +233,15 @@ while(1):
     
     if (GPIO.input(4)!=swstate) #if the switch has changed state 
         if (GPIO.input(4)): #if flood detection is on
-            txnBuffer[buffcount] = makeTransaction('raspA',50,'raspB','raspC') #send the id number 50 (flooded) to the chain.
+            txnBuffer[buffcount] = flooddetect('raspA',50,'raspB',0,'raspC',0) #send the id number 50 (flooded) to the chain.
             buffcount=buffcount+1 #increment once to update the transaction buffer
         
         else (!GPIO.input(4)) #if flood detection is off
-            txnBuffer[buffcount] = makeTransaction('raspA',100,'raspB','raspC') #send the id number 100 (not flooded) to the chain.
+            txnBuffer[buffcount] = flooddetect('raspA',100,'raspB',0,'raspC',0) #send the id number 100 (not flooded) to the chain.
             buffcount=buffcount+1 #increment once to update the transaction buffer
         swstate=GPIO.input(4)# the transaction is only recorded if the switch state has been changed.
         
-    if (time.time()-start_time>10)#every 10 seconds
+    if (time.time()-start_time>10):#every 10 seconds
         transactionbuffer() #check if number of transactions/block is complete and then if so, generate a new block and add to the chain.
         #every 10 seconds the state changes are recorded, the transaction will be read and added to the block chain. if more than 5 transaction
         #in the time period are set off, only 5 transactions / block will be added to the chain (queue the transactions.)
