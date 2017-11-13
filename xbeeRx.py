@@ -1,9 +1,11 @@
 import serial
 
-ser=serial.Serial(port='/dev/ttyAMA0',baudrate=9600)
+port="/dev/ttyAMA0"
+baudrate=9600
+ser=serial.Serial(port,baudrate)
 print("Port Opened!\r\n")
 print("Received data : \r\n")
-x=14
+framedata=14
 fillstr=False
 while True:
 		n=ser.inWaiting()
@@ -25,5 +27,5 @@ while True:
 						fillstr=True
 						
 				
-			Msg=rx[x:-2]
+			Msg=rx[framedata:-2]
 			print Msg
