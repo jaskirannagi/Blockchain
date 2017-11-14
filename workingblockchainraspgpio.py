@@ -64,38 +64,59 @@ def maketestBlock(txns): #make the first block to add to the chain
     return block    
 
 
-def readbroadcastdata():
-	try:
-		n=ser.inWaiting()
-		if n>0:
-			p=0;
-			o=0
-			messga=""
-			finalmsg=""
-			while True:
-				#if ser.read()==startByte:
-				#	print "start byte found!"
-				a=ser.read()
-				if (ord(a)==42):
-					p=p+1	
-					if printmssg==True:
-						printmssg=False
-					else:
-						printmssg=True
-						
-				if printmssg==True:
-					if p>=1:
-						o=o+1
-						if o>1:
-							finalmsg=finalmsg+a
-				elif p>1:
-					break
-					
-                    return {finalmsg}
-            
-            
-            
-            
+def readbroadcastdata():#initialise the xbee port
+    port="/dev/ttyAMA0"
+    baudrate=9600
+    ser=serial.Serial(port,baudrate)
+    #print("Port Opened!\r\n")
+    #print("Received data : \r\n")#defining the permission to join the character
+    fillstr=False
+    Msg=""
+    n=0;
+    n=ser.inWaiting()		#serial inWaiting reading the number of input buffered bytes
+    if n>0:
+        rx=""					#initialise string for received data
+        while True:
+            rxbyte=ser.read()		#reading xbee Rx(Din) pin
+            if ord(rxbyte)==125:		#skip the x7D(125) escaped character
+                continue
+                
+            if ord(rxbyte)==126:
+		        if fillstr==False:
+			        fillstr=True	#allow join in next loop
+			        continue	#skip the x7E(126) start byte
+		        else:
+			        fillstr=False	#skip x7E(126) start byte 
+                      
+            if fillstr==True:		
+                rx=rx+rxbyte		#join received bytes 
+                        
+            if ord(rxbyte)==126:
+                if fillstr==False:
+                    fillstr=True	#allow join after break
+                    break		#break loop to retrieve Msg	
+        Msg=rx[14:-1]				#filtering the API frame bytes
+        
+    return Msg				#printing sent message
+    
+def broadcastdata(instruction,messages):
+	ser.write("\x7e")	#send start byte
+	ser.write("\x00\x14")	#send length bytes
+	ser.write("\x10\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF\x00\x7D\x31")	#send API frame bytes
+    #send message
+	ser.write('*')
+	ser.write((', '.join(messages)).encode())
+	ser.write(instruction+'*')
+	#send checksum
+	ser.write("\xFC")
+	#print indicator
+	print("Message is broadcasted!\r\n")
+	#sleep for 0.5 sec
+	time.sleep(0.5)    
+		
+        
+    		
+
             
             
 def makeTransaction(maxValue=3):#randomly generate a transaction to test the system
@@ -170,6 +191,7 @@ def transactionbuffer(): #call every loop, will reset tranasaction buffer when e
        # print(txnList)
         myBlock = maketestBlock(txnList) #create the bock from the details
         chain.append(myBlock) #add the block to the chain
+        broadcastdata("newchain",myBlock)
         #####for r in range (0,len(chain)):
         #####    print (chain[r])
         #####    print("/////////////////////")            
@@ -245,6 +267,17 @@ def checkBlockValidity(block,parent,state):
     print ("block works fine!")
     return state
 
+def requestchain(chaintwo):
+    for r in range (0,len(chain)):
+        if chain[r]!=chaintwo[r]:
+            return False
+        else:
+            checkChain(chain)
+            return True
+            
+            
+    
+    
 
 
 
@@ -314,7 +347,7 @@ while(1):
         buffcount=0
 
         start_time = time.time()#present time
-       #print(chain)----------------------------------------------------------------------------------------------------------------------------
+        #print(chain)#----------------------------------------------------------------------------------------------------------------------------
         print("creating block")
         #print chain[-1]['hash'] -----------------------------------------------------------------------------------------------------------------
         #print hashMe(chain[-1]['contents'])-----------------------------------------------------------------------------------------------------------------
@@ -351,17 +384,34 @@ while(1):
    
     ### broadcast chain to all nodes
     ### recieve chain from all nodes
-
+    newBlock=""
     newBlock= readbroadcastdata()
-    try:
-        print("New Block Received; checking validity...")
-        state = checkBlockValidity(newBlock,chain[-1],state)
-        chain.append(newBlock)
-        print ("transaction added to chain")
-    except:
-        print("Invalid block; ignoring and waiting for the next block...")
+    if len(newBlock)>3:
+        try:
+            print("New Block Received; checking validity...")
+            print ("transaction added to chain")
+            if newBlock.find("chainrequest")!=-1:
+                 broadcastdata("newchain",chain) #send out shcain
+                 
+            elif (newBlock.find("newblocks"))&((newBlock['contents']['blocknumber'])>((chain[-1]['contents']['blocknumber'])+1)):
+                broadcastdata("chainrequest",0)
+                
+            elif newBlock.find("newchain"):
+                newarray=newBlock.split()#convert text to array called newarray newarray=newBlock.split()
+                if requestchain(newarray)==True:
+                    chain=newBlock
+					
+            elif (newBlock.find("newblocks"))&((newBlock['contents']['blocknumber'])==((chain[-1]['contents']['blocknumber'])+1)):
+                newarray=newBlock.split()#convert text to array called newarray
+                state=checkBlockValidity(newarray,chain[-1],state)
+                checkBlockHash(newarray)
+                chain.append(newBlock)
+                checkChain(chain)
 
-        print("Blockchain on Node A is now %s blocks long"%len(chain))
+        except:
+            print("Invalid block; ignoring and waiting for the next block...")
+
+            print("Blockchain on Node A is now %s blocks long"%len(chain))
         
 
 
