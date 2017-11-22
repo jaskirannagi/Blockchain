@@ -17,7 +17,7 @@ messga=""
 finalmsg=""
 p=0
 
-
+snnd={'newchain':'','message':''}
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.setup(17,GPIO.OUT) #blue
@@ -32,8 +32,72 @@ start_timetran=0
 txnBuffer = [0 for x in range(15)]
 state = {u'raspA':0, u'raspB':0,u'raspC':0}  # Define the initial state
 genesisBlockTxns = [state]  #initial block transactions is equal to the sum of all initial transactions
-genesisBlockContents = {u'blockNumber':0,u'parentHash':None,u'txnCount':1,u'txns':genesisBlockTxns} #dictionary for all the block details
-    
+genesisBlockContents = {u'blockNumber':'0',u'parentHash':'None',u'txnCount':'1',u'txns':genesisBlockTxns} #dictionary for all the block details
+
+def readst(character,strings):
+	declare=0
+	message=""
+	read=False
+	for y in range (0, len(strings)):
+		if strings[y] == character:
+			if read== False:
+				read=True
+				if declare==1:			
+					return message
+					break
+			else:
+				read = False
+		
+		if read == True:		
+			if declare != 0:
+				message=message+strings[y]
+			declare=1
+								
+def getlenth(strings,u,cont):
+	y=u
+	global ctr
+	my_dict={}
+	temp=""
+	while y < len(strings):
+		if strings[y]=='{':
+			my_dict[cont[(ctr)]]=cont[(ctr)+1]	
+			temp=ctr
+			ctr+=1
+			res=getlenth(strings,y+1,cont)
+			y=res['place']
+			my_dict[cont[temp]]=res['content']
+		if strings[y]==',':	
+			my_dict[cont[(ctr)]]=cont[ctr+1]
+			if ((ctr)< len(cont)):
+				ctr=ctr+2
+		if strings[y]=='}':
+			if ((ctr)< len(cont)):
+				my_dict[cont[(ctr)]]=cont[ctr+1]
+				ctr=ctr+2
+			return {'place':y+1,'content':my_dict}
+		y+=1
+		
+def splitmssg(nsssg):
+	go=False
+	count=1
+	incr=0
+	arra={}
+	ctr=0
+	for y in range (0, len(nsssg)):
+		if nsssg[y]=='\'':
+			count=count+1
+			if go ==False:
+				go=True
+
+		if (go==True)&(count%2==0):
+			arra[incr]= (readst('\'',nsssg[y:]))
+			go=False
+			incr+=1
+		
+	print(getlenth(nsssg,0,arra))
+	
+	
+	
 def hashMe(msg=""): #hashing function for the 256 SHA- algorithm
     # For convenience, this is a helper function that wraps our hashing algorithm
     if type(msg)!=str: #if the msg is not a string (public or private keys)
@@ -54,10 +118,10 @@ chain = [genesisBlock] #chain is the genisis block and hash. (can change and che
 def maketestBlock(txns): #make the first block to add to the chain
     parentBlock = chain[-1]#parentblock is last element in the chain 
     parentHash  = parentBlock[u'hash'] #parent hash is last hash in last chain element
-    blockNumber = parentBlock[u'contents'][u'blockNumber'] + 1 #the block number is block number in the contents of the latest chain element +1.
+    blockNumber = chr(ord(parentBlock[u'contents'][u'blockNumber']) + 1) #the block number is block number in the contents of the latest chain element +1.
     txnCount    = len(txns)#count the amount of transactions happend so far
     blockContents = {u'blockNumber':blockNumber,u'parentHash':parentHash,
-                     u'txnCount':len(txns),'txns':txns} #update the block contents
+                     u'txnCount':chr(len(txns)+48),'txns':txns} #update the block contents
     blockHash = hashMe( blockContents ) #hash the block contents
     block = {u'hash':blockHash,u'contents':blockContents} # block is equal to a 2d dictionary of the hash and hash contents.
     
@@ -146,15 +210,15 @@ def updateState(txn): # state (number of transactions, users, etc)
 
     for key in txn:
         if key in state.keys(): #.keys refers to json, i.e. cell positions in an array
-            state[key] += txn[key]#if state  corect, make it = chain + next transactions
+            state[key] += txn[key]#jut adds the transactions over time if the node has a wallet (not needed)
            # print ("state ",state[key])
            # print ("txn ",txn[key])
         else:
-            state[key] = txn[key] #if state not corect, make it = to the chain state
+            state[key] = txn[key] #if wallet doesnt exist, create one.
             #print state[key]
    # print (txn)
    # print (state)
-    return state
+    return True 
     
     
 
@@ -181,7 +245,7 @@ def transactionbuffer(): #call every loop, will reset tranasaction buffer when e
                 txnList.append(newTxn) #add transaction to new transactiion list
                 
                 ####print(newTxn)
-                updateState(newTxn) #update the state of the the ledger
+                #updateState(newTxn) #update the state of the the ledger
             else:
                 print("ignored transaction")
                 sys.stdout.flush()
@@ -252,7 +316,8 @@ def checkBlockValidity(block,parent,state):
     # Check transaction validity; throw an error if an invalid transaction was found.
     for txn in block['contents']['txns']:
         if isValidTxn(txn,state):
-            state = updateState(txn)
+            #state = updateState(txn) #check update state on each block
+			state=True
         else:
             raise Exception('Invalid transaction in block %s: %s'%(blockNumber,txn))
 
@@ -265,7 +330,7 @@ def checkBlockValidity(block,parent,state):
         raise Exception('Parent hash not accurate at block %s'%blockNumber)
         
     print ("block works fine!")
-    return state
+    return True
 
 def requestchain(chaintwo):
     for r in range (0,len(chain)):
@@ -307,7 +372,8 @@ def checkChain(chain):
     # - Block hash is valid for the block contents
 
     for txn in chain[0]['contents']['txns']: #check genisis block
-        state = updateState(txn)
+        #state = updateState(txn) #check state from each block see if the ledger is uptodate
+		state=True
     checkBlockHash(chain[0])
     parent = chain[0]
     
@@ -315,7 +381,7 @@ def checkChain(chain):
     #    - the reference to the parent block's hash
     #    - the validity of the block number
     for block in chain[1:]:
-        state = checkBlockValidity(block,parent,state) #check all other blocks (from one onwards)
+        #state = checkBlockValidity(block,parent,state) #check all other blocks (from one onwards)
         parent = block
         
     return state
@@ -339,38 +405,42 @@ while(1):
    # buffcount=buffcount+1 #increment once to update the transaction buffer
         #transaction=GPIO.input(4)# the transaction is only recorded if the switch state has been changed.
     
-    if (time.time()-start_time>10):#every 10 seconds
+	if (time.time()-start_time>10):#every 10 seconds
         
-        transactionbuffer() #check if number of transactions/block is complete and then if so, generate a new block and add to the chain.
+		transactionbuffer() #check if number of transactions/block is complete and then if so, generate a new block and add to the chain.
         #every 10 seconds the state changes are recorded, the transaction will be read and added to the block chain. if more than 5 transaction
         #in the time period are set off, only 5 transactions / block will be added to the chain (queue the transactions.)
-        buffcount=0
+		buffcount=0
 
-        start_time = time.time()#present time
-        #print(chain)#----------------------------------------------------------------------------------------------------------------------------
-        print("creating block")
+		start_time = time.time()#present time
+		print(chain)#----------------------------------------------------------------------------------------------------------------------------
+		print("creating block")
         #print chain[-1]['hash'] -----------------------------------------------------------------------------------------------------------------
         #print hashMe(chain[-1]['contents'])-----------------------------------------------------------------------------------------------------------------
-        checkChain(chain)
-        state = {u'raspA':0, u'raspB':0,u'raspC':0}
+		checkChain(chain)
+		state = {u'raspA':0, u'raspB':0,u'raspC':0}
         #displaysstatehistroy()#-----------------------------------------------------------------------------------------------------------------
         
-        print "length of array ",len(chain)
+		print "length of array ",len(chain)
     #ranswitch=0;   
    # if (time.time()-start_timetran>2):  
        # ranswitch=random.randint(0,1)    
         
-    if (GPIO.input(4)!=switchstates)|(time.time()-start_timetran>10): #if a food is dtected or 20 seconds has passes
-        start_timetran=time.time()
-        if (GPIO.input(4)):
-            txnBuffer[14-buffcount] = flooddetect('raspA',50,'raspB',0,'raspC',0) #send the id number 50 (flooded) to the chain.            
-        else:
-              txnBuffer[14-buffcount] = flooddetect('raspA',20,'raspB',0,'raspC',0) #send the id number 50 (flooded) to the chain.        
-        buffcount=buffcount+1 #increment once to update the transaction buffer            
-        print("transaction occuring")    
-        switchstates=GPIO.input(4)
+	if (GPIO.input(4)!=switchstates)|(time.time()-start_timetran>10): #if a food is dtected or 20 seconds has passes
+		start_timetran=time.time()
+		if (GPIO.input(4)):
+			txnBuffer[14-buffcount] = flooddetect('raspA','50','raspB','0','raspC','0') #send the id number 50 (flooded) to the chain.            
+		else:
+			txnBuffer[14-buffcount] = flooddetect('raspA','20','raspB','0','raspC','0') #send the id number 50 (flooded) to the chain.        
+		buffcount=buffcount+1 #increment once to update the transaction buffer            
+		print("transaction occuring")    
+		switchstates=GPIO.input(4)
        # switchstates=ranswitch
-            
+		snnd['newchain']=chain
+		snnd['mssg']="newchain"  
+		if len(snnd['mssg'])>3:
+			print ("test for splitmssg")
+			print (splitmssg(snnd['newchain']))
             #################write function that sifts through the chain and adds up all the values for the ledger!
 
         
@@ -384,34 +454,39 @@ while(1):
    
     ### broadcast chain to all nodes
     ### recieve chain from all nodes
-    newBlock=""
-    newBlock= readbroadcastdata()
-    if len(newBlock)>3:
-        try:
-            print("New Block Received; checking validity...")
-            print ("transaction added to chain")
-            if newBlock.find("chainrequest")!=-1:
-                 broadcastdata("newchain",chain) #send out shcain
+	newBlock=""
+    #newBlock= readbroadcastdata()
+	if len(newBlock)>3:
+		try:
+			print("New Block Received; checking validity...")
+			print ("transaction added to chain")
+			if newBlock.find("chainrequest")!=-1:
+				
+				sndd['newchain']=chain
+				snnd['mssg']="newchain"
+				broadcastdata(sndd) #send out shcain
                  
-            elif (newBlock.find("newblocks"))&((newBlock['contents']['blocknumber'])>((chain[-1]['contents']['blocknumber'])+1)):
-                broadcastdata("chainrequest",0)
+			elif (newBlock.find("newblocks"))&((newBlock['contents']['blocknumber'])>((chain[-1]['contents']['blocknumber'])+1)):
+				sndd['newchain']=''
+				snnd['mssg']="chainrequest"
+				broadcastdata(sndd) #send out shcain
                 
-            elif newBlock.find("newchain"):
-                newarray=newBlock.split()#convert text to array called newarray newarray=newBlock.split()
-                if requestchain(newarray)==True:
-                    chain=newBlock
+			elif newBlock.find("newchain"):
+				newarray=splitmssg(newBlock)
+				if requestchain(newarray)==True:
+					chain=newBlock
 					
-            elif (newBlock.find("newblocks"))&((newBlock['contents']['blocknumber'])==((chain[-1]['contents']['blocknumber'])+1)):
-                newarray=newBlock.split()#convert text to array called newarray
-                state=checkBlockValidity(newarray,chain[-1],state)
-                checkBlockHash(newarray)
-                chain.append(newBlock)
-                checkChain(chain)
+			elif (newBlock.find("newblocks"))&((newBlock['contents']['blocknumber'])==((chain[-1]['contents']['blocknumber'])+1)):
+				newarray=splitmssg(newBlock)
+				state=checkBlockValidity(newarray,chain[-1],state)
+				checkBlockHash(newarray)
+				chain.append(newBlock)
+				checkChain(chain)
 
-        except:
-            print("Invalid block; ignoring and waiting for the next block...")
+		except:
+			print("Invalid block; ignoring and waiting for the next block...")
 
-            print("Blockchain on Node A is now %s blocks long"%len(chain))
+			print("Blockchain on Node A is now %s blocks long"%len(chain))
         
 
 
